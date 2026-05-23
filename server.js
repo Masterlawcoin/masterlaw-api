@@ -259,14 +259,14 @@ app.post('/api/clientes', authRequired, async (req, res) => {
 // ══ 404 ══
 app.use((req, res) => res.status(404).json({ error: 'Endpoint no encontrado' }));
 
-// ══ INICIO ══
-app.listen(PORT, () => {
-  console.log('\n╔══════════════════════════════════════╗');
-  console.log(`║   MasterlawIA API v1.0 - Puerto ${PORT}   ║`);
-  console.log('╠══════════════════════════════════════╣');
-  console.log(`║  Supabase: ${process.env.SUPABASE_URL ? '✅ Conectado      ' : '❌ Sin configurar '}       ║`);
-  console.log(`║  OpenAI:   ${process.env.OPENAI_API_KEY ? '✅ Conectado      ' : '❌ Sin configurar '}       ║`);
-  console.log('╚══════════════════════════════════════╝\n');
-});
+// ══ INICIO LOCAL ══
+
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Masterlaw API corriendo puerto ${PORT}`);
+  });
+}
+
+// ══ EXPORT VERCEL ══
 
 module.exports = app;
