@@ -4,9 +4,17 @@
     {
       "src": "server.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "panos-api.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/panos(?:/.*)?",
+      "dest": "panos-api.js"
+    },
     {
       "src": "/(.*)",
       "dest": "server.js"
