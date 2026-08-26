@@ -1,0 +1,9 @@
+{
+  "name": "VCH Control de Jornada",
+  "short_name": "VCH Jornada",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#08111f",
+  "theme_color": "#0b5cff",
+  "description": "Control de entrada, salida y reportes VCH"
+}
