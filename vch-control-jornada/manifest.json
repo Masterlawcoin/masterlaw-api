@@ -1,9 +1,11 @@
 {
   "name": "VCH Control de Jornada",
   "short_name": "VCH Jornada",
-  "start_url": "./",
+  "description": "Control de jornada VCH con perfiles Administrador, Supervisor y Trabajador",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#08111f",
+  "background_color": "#07101d",
   "theme_color": "#0b5cff",
-  "description": "Control de entrada, salida y reportes VCH"
+  "orientation": "portrait-primary"
 }
