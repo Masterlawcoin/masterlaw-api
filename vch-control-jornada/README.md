@@ -1,32 +1,22 @@
-# VCH Control de Jornada
+# VCH Control de Jornada — File Manager
 
-PWA independiente para publicar directamente en **File Manager de Masterlaw**. GitHub se usa solo para versionado y Supabase para datos, autenticación y funciones seguras. **No usa n8n.**
+Arquitectura final: **File Manager + Supabase**, sin n8n.
 
-## Arquitectura final
-File Manager (`public_html/vch-jornada/`) → PWA móvil/web → Supabase Auth/PostgreSQL/RLS → jornadas y marcaciones → SHA-256 → dashboard → CSV/PDF.
+## Roles
+- **Administrador:** crea trabajadores y supervisores, asigna personal, ve reportes y controla altas/bajas.
+- **Supervisor:** registra entrada/salida por RUT o QR, ve pendientes y reportes.
+- **Trabajador:** entra con su cuenta, ve su QR individual y su historial de jornadas.
 
-## Flujo
-Supervisor autenticado → selecciona Entrada/Salida → escanea QR o ingresa RUT → Supabase registra hora de servidor → jornada se abre/cierra → se genera hash SHA-256 encadenado → dashboard y reportes.
-
-## Seguridad
-- La clave incluida en `config.js` es publishable; nunca usar service_role en el frontend.
-- RLS activo.
-- Cada marcación usa hora del servidor y cadena SHA-256 (`prev_hash` + evento actual).
-- La salida NO se inventa automáticamente: si falta, queda pendiente para regularización auditada.
-
-## Reportes / gerencia
-- Botón **Generar reporte**: consulta el resumen seguro desde Supabase.
-- **Descargar CSV**: genera el archivo en el navegador.
-- **Imprimir / PDF**: permite guardar un PDF desde celular o PC.
-- No hay webhook ni dependencia de n8n.
-- Si después quieres correo automático a gerencia, se puede hacer con un PHP/SMTP dentro de File Manager, manteniendo las credenciales fuera del frontend.
-
-## File Manager
-Subir esta carpeta completa a:
-`public_html/vch-jornada/`
+## Instalación
+Subir el contenido de esta carpeta directamente a:
+`public_html/vch-control-jornada/`
 
 Abrir:
-`https://masterlaw.cl/vch-jornada/`
+`https://masterlaw.cl/vch-control-jornada/`
 
-## Primer supervisor
-Crear el usuario en Supabase Auth y luego asociarlo en `vch_supervisores` con su `user_id`. No se incluye auto-registro de supervisor por seguridad.
+Si el hosting conserva caché, hacer Ctrl+F5 y limpiar WP Fastest Cache.
+
+## Seguridad
+El frontend usa solo la clave publishable de Supabase. No contiene `service_role`.
+Las horas de marcación se calculan en el servidor y cada evento queda encadenado con SHA-256.
+La administración de cuentas Auth se realiza mediante la Edge Function autenticada `vch-admin-users`, que valida que el llamante sea un administrador VCH activo.
