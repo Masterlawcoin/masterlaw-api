@@ -20,6 +20,10 @@
     {
       "src": "ia-training.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "ia-training-ui.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -37,7 +41,7 @@
     },
     {
       "src": "/admin/entrenamiento-ia",
-      "dest": "ia-training.js"
+      "dest": "ia-training-ui.js"
     },
     {
       "src": "/api/ia-training(?:/.*)?",
