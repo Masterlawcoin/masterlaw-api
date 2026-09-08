@@ -16,14 +16,6 @@
     {
       "src": "panos-web-api.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "ia-training.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "ia-training-ui.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -38,14 +30,6 @@
     {
       "src": "/api/panos(?:/.*)?",
       "dest": "panos-api-v2.js"
-    },
-    {
-      "src": "/admin/entrenamiento-ia",
-      "dest": "ia-training-ui.js"
-    },
-    {
-      "src": "/api/ia-training(?:/.*)?",
-      "dest": "ia-training.js"
     },
     {
       "src": "/(.*)",
