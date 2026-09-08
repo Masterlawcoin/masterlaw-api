@@ -2,6 +2,10 @@
   "version": 2,
   "builds": [
     {
+      "src": "frutillar/**",
+      "use": "@vercel/static"
+    },
+    {
       "src": "server.js",
       "use": "@vercel/node"
     },
@@ -19,6 +23,14 @@
     }
   ],
   "routes": [
+    {
+      "src": "/frutillar/?",
+      "dest": "/frutillar/index.html"
+    },
+    {
+      "src": "/frutillar/(.*)",
+      "dest": "/frutillar/$1"
+    },
     {
       "src": "/api/panos/web/menu",
       "dest": "panos-web-api.js"
