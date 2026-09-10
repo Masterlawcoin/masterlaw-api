@@ -51,7 +51,6 @@ jobs:
           test -f os2-angular-v18-34/dist/masterlaw/browser/index.html
           test -f os2-angular-v18-34/dist/masterlaw/browser/.htaccess
           grep -q '<base href="/os2-staging/">' os2-angular-v18-34/dist/masterlaw/browser/index.html
-          grep -Rqs '/masterlaw-core/api' os2-angular-v18-34/dist/masterlaw/browser || true
 
       - name: Package build as base64
         shell: bash
@@ -78,3 +77,5 @@ jobs:
           fi
           git commit -m 'build(os2): compile V18.34 staging [skip ci]'
           git push origin HEAD:os2-build-v18-34
+
+# registered on main only to allow isolated branch builds
