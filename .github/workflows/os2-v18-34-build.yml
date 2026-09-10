@@ -1,0 +1,80 @@
+name: MASTERLAW OS2 V18.34 Build
+
+on:
+  push:
+    branches:
+      - os2-build-v18-34
+    paths:
+      - 'os2-build-v18-34/source.tar.gz.b64'
+      - '.github/workflows/os2-v18-34-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-angular-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+        with:
+          ref: os2-build-v18-34
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Decode V18.34 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf os2-angular-v18-34
+          mkdir -p os2-angular-v18-34
+          base64 -d os2-build-v18-34/source.tar.gz.b64 > /tmp/os2-v18-34-source.tar.gz
+          echo '320bdb8203ecdd6f2cd38f85079136a0360a9feff15983138ea5913ff5f4799b  /tmp/os2-v18-34-source.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/os2-v18-34-source.tar.gz -C os2-angular-v18-34
+
+      - name: Install Angular dependencies
+        working-directory: os2-angular-v18-34
+        run: npm install --no-audit --no-fund
+
+      - name: Build /os2-staging/
+        working-directory: os2-angular-v18-34
+        run: npm run build:staging
+
+      - name: Validate build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f os2-angular-v18-34/dist/masterlaw/browser/index.html
+          test -f os2-angular-v18-34/dist/masterlaw/browser/.htaccess
+          grep -q '<base href="/os2-staging/">' os2-angular-v18-34/dist/masterlaw/browser/index.html
+          grep -Rqs '/masterlaw-core/api' os2-angular-v18-34/dist/masterlaw/browser || true
+
+      - name: Package build as base64
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip
+          cd os2-angular-v18-34/dist/masterlaw/browser
+          zip -qr /tmp/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip .
+          cd "$GITHUB_WORKSPACE"
+          sha256sum /tmp/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip > os2-build-v18-34/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip.sha256
+          base64 -w0 /tmp/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip > os2-build-v18-34/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip.b64
+          printf '\n' >> os2-build-v18-34/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip.b64
+
+      - name: Commit compiled staging artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'MASTERLAW Build Bot'
+          git config user.email '87247129+Masterlawcoin@users.noreply.github.com'
+          git add os2-build-v18-34/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip.b64 os2-build-v18-34/MASTERLAW_OS2_STAGING_V18_34_FILE_MANAGER.zip.sha256
+          if git diff --cached --quiet; then
+            echo 'Build output unchanged.'
+            exit 0
+          fi
+          git commit -m 'build(os2): compile V18.34 staging [skip ci]'
+          git push origin HEAD:os2-build-v18-34
