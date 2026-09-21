@@ -1,0 +1,22 @@
+--- a/masterlaw-core/api/index.php
++++ b/masterlaw-core/api/index.php
+@@
+ function ml_core_rate_limit(string $route,int $limit=30,int $window=600):void{
+-  // Todas las rutas, incluido acceso, pasan por control antiabuso.
++  // Antiabuso central. El acceso no debe quedar inutilizable si falla
++  // temporalmente el RPC de rate-limit. En rutas de login se usa fail-open
++  // controlado; el RPC de autenticacion sigue validando credenciales.
+   $r=ml_supabase()->rpc('ml_core_rate_limit',['p_client_key'=>ml_core_client_key(),'p_route'=>$route,'p_limit'=>$limit,'p_window_seconds'=>$window]);
+-  if(!$r['ok'])MLHttp::fail('Control temporal no disponible',503);
++  if(!$r['ok']){
++    $loginRoutes=[
++      'auth-login-attempt','auth-login-fail',
++      'session-login-attempt','session-login-fail',
++      'broker-session-login-attempt','broker-session-login-fail'
++    ];
++    if(in_array($route,$loginRoutes,true))return;
++    MLHttp::fail('Control temporal no disponible',503);
++  }
+   $allowed=(bool)($r['json']??false);
+   if(!$allowed)MLHttp::fail('Limite temporal de operacion alcanzado.',429);
+ }
