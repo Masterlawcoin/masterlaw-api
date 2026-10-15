@@ -7,6 +7,7 @@ on:
       - 'exchange-p2p-api.js'
       - 'migrations/2026-10-15_masterlaw_p2p_control_plane.sql'
       - 'test-p2p-access.js'
+      - 'test-p2p-wallet-binding.js'
       - 'vercel.json'
       - '.github/workflows/p2p-control-plane-ci.yml'
   push:
@@ -16,6 +17,7 @@ on:
       - 'exchange-p2p-api.js'
       - 'migrations/2026-10-15_masterlaw_p2p_control_plane.sql'
       - 'test-p2p-access.js'
+      - 'test-p2p-wallet-binding.js'
       - 'vercel.json'
       - '.github/workflows/p2p-control-plane-ci.yml'
 
@@ -36,18 +38,36 @@ jobs:
       - name: Syntax checks
         run: |
           node --check exchange/p2p-access.js
+          node --check exchange/p2p-wallet-binding.js
           node --check exchange-p2p-api.js
           node --check test-p2p-access.js
+          node --check test-p2p-wallet-binding.js
       - name: KYC fail-closed policy test
         run: node test-p2p-access.js
-      - name: Validate isolated Vercel route
+      - name: Stateless wallet entitlement test
+        run: node test-p2p-wallet-binding.js
+      - name: Validate isolated Vercel route and binding surface
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'exchange-p2p-api.js' vercel.json
           grep -q '/api/exchange/p2p' vercel.json
+          grep -q "app.post('/api/exchange/p2p/bind-wallet'" exchange-p2p-api.js
+          grep -q "methods: \['GET','POST','OPTIONS'\]" exchange-p2p-api.js
           grep -q 'database_mutation: false' exchange-p2p-api.js
           grep -q "identity_source: 'MASTERLAW_USUARIOS_ID'" exchange-p2p-api.js
+          grep -q "MASTERLAW_P2P_ENTITLEMENT_V1" exchange/p2p-wallet-binding.js
+          grep -q "P2P_SIGNED_SESSION" exchange/p2p-wallet-binding.js
+          grep -q "real_money_enabled: false" exchange/p2p-wallet-binding.js
+      - name: Guard stateless read-only binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R -n -E '\.(insert|update|upsert|delete)\(' exchange/p2p-wallet-binding.js exchange-p2p-api.js
+          ! grep -R -n -E 'eth_sendTransaction|private[_ -]?key|secretKey' exchange/p2p-wallet-binding.js exchange-p2p-api.js
+          ! grep -R -n -E 'localStorage|sessionStorage' exchange/p2p-wallet-binding.js exchange-p2p-api.js
+          grep -q "persistence:'NOT_WRITTEN'" exchange-p2p-api.js
+          grep -q "real_money_enabled:false" exchange-p2p-api.js
       - name: Guard non-executed migration
         shell: bash
         run: |
