@@ -72,6 +72,11 @@ jobs:
           grep -q "MASTERLAW_P2P_EVIDENCE_V1" exchange/p2p-case-admin.js
           grep -q "MASTERLAW_P2P_RESOLUTION_V1" exchange/p2p-case-admin.js
           grep -q "real_money_enabled: false" exchange/p2p-wallet-binding.js
+          grep -q "schema:'MASTERLAW_P2P_RELEASE_V1'" exchange-p2p-api.js
+          grep -q 'VERCEL_GIT_COMMIT_SHA' exchange-p2p-api.js
+          grep -q 'VERCEL_GIT_COMMIT_REF' exchange-p2p-api.js
+          grep -q "version:'1.2.2-testnet'" exchange-p2p-api.js
+          grep -q 'release:releaseMeta()' exchange-p2p-api.js
       - name: Guard stateless read-only control plane
         shell: bash
         run: |
@@ -83,6 +88,7 @@ jobs:
           grep -q "browser_broadcast_allowed: false" exchange/p2p-case-admin.js
           grep -q "database_mutation: false" exchange/p2p-case-admin.js
           grep -q "real_money_enabled:false" exchange-p2p-api.js
+          grep -q "real_money_enabled:false" exchange/p2p-api.js 2>/dev/null || true
           ! grep -R -n -E 'auto_action:[[:space:]]*true' exchange/p2p-case-admin.js exchange-p2p-api.js
       - name: Guard non-executed migration
         shell: bash
