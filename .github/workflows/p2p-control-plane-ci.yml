@@ -8,6 +8,7 @@ on:
       - 'migrations/2026-10-15_masterlaw_p2p_control_plane.sql'
       - 'test-p2p-access.js'
       - 'test-p2p-wallet-binding.js'
+      - 'test-p2p-case-admin.js'
       - 'vercel.json'
       - '.github/workflows/p2p-control-plane-ci.yml'
   push:
@@ -18,6 +19,7 @@ on:
       - 'migrations/2026-10-15_masterlaw_p2p_control_plane.sql'
       - 'test-p2p-access.js'
       - 'test-p2p-wallet-binding.js'
+      - 'test-p2p-case-admin.js'
       - 'vercel.json'
       - '.github/workflows/p2p-control-plane-ci.yml'
 
@@ -39,35 +41,49 @@ jobs:
         run: |
           node --check exchange/p2p-access.js
           node --check exchange/p2p-wallet-binding.js
+          node --check exchange/p2p-case-admin.js
           node --check exchange-p2p-api.js
           node --check test-p2p-access.js
           node --check test-p2p-wallet-binding.js
+          node --check test-p2p-case-admin.js
       - name: KYC fail-closed policy test
         run: node test-p2p-access.js
       - name: Stateless wallet entitlement test
         run: node test-p2p-wallet-binding.js
-      - name: Validate isolated Vercel route and binding surface
+      - name: Stateless admin case packet test
+        run: node test-p2p-case-admin.js
+      - name: Validate isolated Vercel route and control surfaces
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'exchange-p2p-api.js' vercel.json
           grep -q '/api/exchange/p2p' vercel.json
           grep -q "app.post('/api/exchange/p2p/bind-wallet'" exchange-p2p-api.js
+          grep -q "app.get('/api/exchange/p2p/admin/state-machine'" exchange-p2p-api.js
+          grep -q "app.post('/api/exchange/p2p/admin/prepare-case'" exchange-p2p-api.js
+          grep -q "app.post('/api/exchange/p2p/admin/prepare-evidence'" exchange-p2p-api.js
+          grep -q "app.post('/api/exchange/p2p/admin/prepare-resolution'" exchange-p2p-api.js
+          grep -q "P2P_ADMIN_ROLES || 'admin'" exchange-p2p-api.js
           grep -q "methods: \['GET','POST','OPTIONS'\]" exchange-p2p-api.js
           grep -q 'database_mutation: false' exchange-p2p-api.js
           grep -q "identity_source: 'MASTERLAW_USUARIOS_ID'" exchange-p2p-api.js
           grep -q "MASTERLAW_P2P_ENTITLEMENT_V1" exchange/p2p-wallet-binding.js
-          grep -q "P2P_SIGNED_SESSION" exchange/p2p-wallet-binding.js
+          grep -q "MASTERLAW_P2P_CASE_V1" exchange/p2p-case-admin.js
+          grep -q "MASTERLAW_P2P_EVIDENCE_V1" exchange/p2p-case-admin.js
+          grep -q "MASTERLAW_P2P_RESOLUTION_V1" exchange/p2p-case-admin.js
           grep -q "real_money_enabled: false" exchange/p2p-wallet-binding.js
-      - name: Guard stateless read-only binding
+      - name: Guard stateless read-only control plane
         shell: bash
         run: |
           set -euo pipefail
-          ! grep -R -n -E '\.(insert|update|upsert|delete)\(' exchange/p2p-wallet-binding.js exchange-p2p-api.js
-          ! grep -R -n -E 'eth_sendTransaction|private[_ -]?key|secretKey' exchange/p2p-wallet-binding.js exchange-p2p-api.js
-          ! grep -R -n -E 'localStorage|sessionStorage' exchange/p2p-wallet-binding.js exchange-p2p-api.js
+          ! grep -R -n -E '\.(insert|update|upsert|delete)\(' exchange/p2p-wallet-binding.js exchange/p2p-case-admin.js exchange-p2p-api.js
+          ! grep -R -n -E 'eth_sendTransaction|private[_ -]?key|secretKey' exchange/p2p-wallet-binding.js exchange/p2p-case-admin.js exchange-p2p-api.js
+          ! grep -R -n -E 'localStorage|sessionStorage' exchange/p2p-wallet-binding.js exchange/p2p-case-admin.js exchange-p2p-api.js
           grep -q "persistence:'NOT_WRITTEN'" exchange-p2p-api.js
+          grep -q "browser_broadcast_allowed: false" exchange/p2p-case-admin.js
+          grep -q "database_mutation: false" exchange/p2p-case-admin.js
           grep -q "real_money_enabled:false" exchange-p2p-api.js
+          ! grep -R -n -E 'auto_action:[[:space:]]*true' exchange/p2p-case-admin.js exchange-p2p-api.js
       - name: Guard non-executed migration
         shell: bash
         run: |
