@@ -291,7 +291,8 @@ app.post('/api/exchange/p2p/admin/prepare-evidence', authRequired, p2pAdminRequi
 
 app.post('/api/exchange/p2p/admin/prepare-resolution', authRequired, p2pAdminRequired, (req, res) => {
   try {
-    return res.json({ ok:true, actor:req.p2pAdmin, ...prepareResolution(req.body || {}) });
+    const body = { ...(req.body || {}), approved_by:req.p2pAdmin.user_id };
+    return res.json({ ok:true, actor:req.p2pAdmin, ...prepareResolution(body) });
   } catch (error) {
     return adminPacketError(res, error);
   }
@@ -301,12 +302,13 @@ app.get('/api/exchange/p2p/health', (_req, res) => {
   res.json({
     ok:true,
     service:'MASTERLAW_P2P_CONTROL_PLANE',
-    version:'1.2.0-testnet',
+    version:'1.2.1-testnet',
     identity_store_configured:!!supabase,
     jwt_configured:!!jwtSecret,
     entitlement_signing_configured:!!entitlementSecret,
     wallet_attestation_source:'P2P_SIGNED_SESSION_READ_ONLY',
     admin_workspace:'PREPARE_ONLY',
+    resolution_approver_source:'AUTHENTICATED_ADMIN',
     chain_id:ARC_CHAIN_ID,
     writes_enabled:false,
     real_money_enabled:false

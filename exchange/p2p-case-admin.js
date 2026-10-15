@@ -93,11 +93,16 @@ function sha256Hex(value) {
 function normalizeRiskSnapshot(input = {}) {
   const level = String(input.level ?? 'LOW').trim().toUpperCase();
   assert(RISK_LEVELS.has(level), 'INVALID_RISK_LEVEL');
+  let score = null;
+  if (input.score != null && String(input.score).trim() !== '') {
+    score = Number(input.score);
+    assert(Number.isFinite(score) && score >= 0 && score <= 100, 'INVALID_RISK_SCORE');
+  }
   return {
     level,
     source: optionalText(input.source, 80) || 'HUMAN_REVIEW',
     signals: normalizeSignals(input.signals),
-    score: input.score == null ? null : Number(input.score),
+    score,
     auto_action: false,
     human_review_required: true
   };
@@ -171,7 +176,8 @@ function prepareEvidence(input = {}) {
     evidence_manifest_hash: sha256Hex(manifest),
     content_hash: sha256,
     upload_performed: false,
-    database_mutation: false
+    database_mutation: false,
+    real_money_enabled: false
   };
 }
 function prepareResolution(input = {}) {
