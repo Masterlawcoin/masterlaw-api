@@ -54,6 +54,17 @@ const p2pAdminRoles = new Set(
     .filter(Boolean)
 );
 
+function releaseMeta() {
+  return {
+    schema:'MASTERLAW_P2P_RELEASE_V1',
+    git_sha:process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || null,
+    git_ref:process.env.VERCEL_GIT_COMMIT_REF || process.env.GITHUB_REF_NAME || null,
+    environment:process.env.VERCEL_ENV || (process.env.GITHUB_ACTIONS ? 'github-actions' : process.env.NODE_ENV || 'local'),
+    chain_id:ARC_CHAIN_ID,
+    real_money_enabled:false
+  };
+}
+
 function authRequired(req, res, next) {
   if (!jwtSecret) return res.status(503).json({ ok:false, eligible:false, reason:'MASTERLAW_AUTH_NOT_CONFIGURED' });
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
@@ -302,7 +313,8 @@ app.get('/api/exchange/p2p/health', (_req, res) => {
   res.json({
     ok:true,
     service:'MASTERLAW_P2P_CONTROL_PLANE',
-    version:'1.2.1-testnet',
+    version:'1.2.2-testnet',
+    release:releaseMeta(),
     identity_store_configured:!!supabase,
     jwt_configured:!!jwtSecret,
     entitlement_signing_configured:!!entitlementSecret,
