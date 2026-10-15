@@ -36,6 +36,7 @@ const prepared = prepareCase({
 });
 assert.equal(prepared.packet.chain_id, 5042002);
 assert.equal(prepared.packet.status, 'OPENED');
+assert.equal(prepared.packet.risk_snapshot.score, 72);
 assert.equal(prepared.packet.risk_snapshot.auto_action, false);
 assert.equal(prepared.packet.risk_snapshot.human_review_required, true);
 assert.match(prepared.case_hash, /^0x[0-9a-f]{64}$/);
@@ -54,6 +55,8 @@ throwsCode(() => validateTransition('OPENED','EXECUTED'), 'INVALID_CASE_TRANSITI
 throwsCode(() => validateTransition('CLOSED','UNDER_REVIEW'), 'CASE_STATE_TERMINAL');
 throwsCode(() => prepareCase({case_number:'x',external_trade_id:'y',buyer_wallet:BUYER,seller_wallet:BUYER,crypto_amount_base_units:'1'}), 'BUYER_SELLER_WALLET_MATCH');
 throwsCode(() => prepareCase({case_number:'x',external_trade_id:'y',buyer_wallet:BUYER,seller_wallet:SELLER,chain_id:84532,crypto_amount_base_units:'1'}), 'ARC_TESTNET_ONLY');
+throwsCode(() => prepareCase({case_number:'x',external_trade_id:'y',buyer_wallet:BUYER,seller_wallet:SELLER,crypto_amount_base_units:'1',risk_snapshot:{level:'HIGH',score:101}}), 'INVALID_RISK_SCORE');
+throwsCode(() => prepareCase({case_number:'x',external_trade_id:'y',buyer_wallet:BUYER,seller_wallet:SELLER,crypto_amount_base_units:'1',risk_snapshot:{level:'HIGH',score:'not-a-number'}}), 'INVALID_RISK_SCORE');
 
 const evidence = prepareEvidence({
   case_hash:prepared.case_hash,
@@ -67,6 +70,7 @@ assert.match(evidence.evidence_manifest_hash, /^0x[0-9a-f]{64}$/);
 assert.equal(evidence.content_hash, CONTENT);
 assert.equal(evidence.upload_performed, false);
 assert.equal(evidence.database_mutation, false);
+assert.equal(evidence.real_money_enabled, false);
 
 const resolution = prepareResolution({
   case_hash:prepared.case_hash,
