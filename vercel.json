@@ -10,6 +10,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "exchange-p2p-api.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "panos-api.js",
       "use": "@vercel/node"
     },
@@ -30,6 +34,10 @@
     {
       "src": "/frutillar/(.*)",
       "dest": "/frutillar/$1"
+    },
+    {
+      "src": "/api/exchange/p2p(?:/.*)?",
+      "dest": "exchange-p2p-api.js"
     },
     {
       "src": "/api/panos/web/menu",

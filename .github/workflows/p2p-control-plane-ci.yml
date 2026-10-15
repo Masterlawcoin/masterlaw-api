@@ -1,0 +1,57 @@
+name: MASTERLAW P2P Control Plane CI
+
+on:
+  pull_request:
+    paths:
+      - 'exchange/**'
+      - 'exchange-p2p-api.js'
+      - 'migrations/2026-10-15_masterlaw_p2p_control_plane.sql'
+      - 'test-p2p-access.js'
+      - 'vercel.json'
+      - '.github/workflows/p2p-control-plane-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'exchange/**'
+      - 'exchange-p2p-api.js'
+      - 'migrations/2026-10-15_masterlaw_p2p_control_plane.sql'
+      - 'test-p2p-access.js'
+      - 'vercel.json'
+      - '.github/workflows/p2p-control-plane-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Syntax checks
+        run: |
+          node --check exchange/p2p-access.js
+          node --check exchange-p2p-api.js
+          node --check test-p2p-access.js
+      - name: KYC fail-closed policy test
+        run: node test-p2p-access.js
+      - name: Validate isolated Vercel route
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'exchange-p2p-api.js' vercel.json
+          grep -q '/api/exchange/p2p' vercel.json
+          grep -q 'database_mutation: false' exchange-p2p-api.js
+          grep -q "identity_source: 'MASTERLAW_USUARIOS_ID'" exchange-p2p-api.js
+      - name: Guard non-executed migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s migrations/2026-10-15_masterlaw_p2p_control_plane.sql
+          grep -q 'PREPARED MIGRATION ONLY' migrations/2026-10-15_masterlaw_p2p_control_plane.sql
+          ! grep -R -n -E 'supabase (db push|migration up)|psql .*masterlaw_p2p_control_plane' exchange exchange-p2p-api.js package.json vercel.json
