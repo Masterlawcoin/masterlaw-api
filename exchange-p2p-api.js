@@ -14,6 +14,17 @@ const {
   attestP2PSession,
   issueEntitlement
 } = require('./exchange/p2p-wallet-binding');
+const {
+  CASE_STATES,
+  ALLOWED_TRANSITIONS,
+  RISK_LEVELS,
+  EVIDENCE_VISIBILITY,
+  RESOLUTION_MODES,
+  validateTransition,
+  prepareCase,
+  prepareEvidence,
+  prepareResolution
+} = require('./exchange/p2p-case-admin');
 
 const app = express();
 app.use(cors({
@@ -36,6 +47,12 @@ const jwtSecret = process.env.JWT_SECRET;
 const entitlementSecret = process.env.P2P_ENTITLEMENT_SECRET || jwtSecret;
 const p2pEdgeUrl = process.env.MASTERLAWEX_P2P_EDGE_URL || DEFAULT_P2P_EDGE;
 const supabase = supabaseUrl && serviceKey ? createClient(supabaseUrl, serviceKey) : null;
+const p2pAdminRoles = new Set(
+  String(process.env.P2P_ADMIN_ROLES || 'admin')
+    .split(',')
+    .map((role) => role.trim().toLowerCase())
+    .filter(Boolean)
+);
 
 function authRequired(req, res, next) {
   if (!jwtSecret) return res.status(503).json({ ok:false, eligible:false, reason:'MASTERLAW_AUTH_NOT_CONFIGURED' });
@@ -43,7 +60,6 @@ function authRequired(req, res, next) {
   if (!token) return res.status(401).json({ ok:false, eligible:false, reason:'MASTERLAW_TOKEN_REQUIRED' });
   try {
     const claims = jwt.verify(token, jwtSecret);
-    // A short-lived P2P entitlement must never be accepted as a Masterlaw login token.
     if (!claims?.id || claims.type === ENTITLEMENT_TYPE) throw new Error('invalid identity token type');
     req.user = claims;
     next();
@@ -52,7 +68,7 @@ function authRequired(req, res, next) {
   }
 }
 
-async function getMasterlawAccess(userId) {
+async function getCurrentUser(userId) {
   if (!supabase) return { status:503, ok:false, reason:'MASTERLAW_IDENTITY_STORE_UNAVAILABLE' };
   const { data:user, error } = await supabase
     .from('usuarios')
@@ -60,8 +76,43 @@ async function getMasterlawAccess(userId) {
     .eq('id', userId)
     .single();
   if (error || !user) return { status:401, ok:false, reason:'MASTERLAW_IDENTITY_NOT_FOUND' };
-  const decision = accessDecision(user);
-  return { status:decision.eligible ? 200 : 403, ok:true, user, decision };
+  return { status:200, ok:true, user };
+}
+
+async function getMasterlawAccess(userId) {
+  const current = await getCurrentUser(userId);
+  if (!current.ok) return current;
+  const decision = accessDecision(current.user);
+  return { status:decision.eligible ? 200 : 403, ok:true, user:current.user, decision };
+}
+
+async function p2pAdminRequired(req, res, next) {
+  try {
+    const current = await getCurrentUser(req.user.id);
+    if (!current.ok) return res.status(current.status).json({ ok:false, reason:current.reason });
+    const role = String(current.user.rol || '').trim().toLowerCase();
+    if (current.user.activo === false || !p2pAdminRoles.has(role)) {
+      return res.status(403).json({ ok:false, reason:'P2P_ADMIN_ROLE_REQUIRED' });
+    }
+    req.p2pAdmin = { user_id:current.user.id, role };
+    next();
+  } catch (error) {
+    return res.status(503).json({
+      ok:false,
+      reason:'P2P_ADMIN_AUTH_UNAVAILABLE',
+      error:process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
+  }
+}
+
+function adminPacketError(res, error) {
+  const code = String(error?.code || error?.message || 'INVALID_ADMIN_PACKET');
+  return res.status(400).json({
+    ok:false,
+    reason:code,
+    database_mutation:false,
+    real_money_enabled:false
+  });
 }
 
 app.get('/api/exchange/p2p/policy', (_req, res) => {
@@ -78,6 +129,14 @@ app.get('/api/exchange/p2p/policy', (_req, res) => {
       mode: 'MASTERLAW_JWT_PLUS_P2P_SIGNED_SESSION',
       persistence: 'TEMPORARY_NOT_WRITTEN',
       entitlement_ttl_seconds: ENTITLEMENT_TTL_SECONDS
+    },
+    admin_workspace: {
+      mode: 'PREPARE_ONLY',
+      role_source: 'MASTERLAW_USUARIOS_ROL',
+      default_roles: ['admin'],
+      case_schema: 'MASTERLAW_P2P_CASE_V1',
+      evidence_schema: 'MASTERLAW_P2P_EVIDENCE_V1',
+      resolution_schema: 'MASTERLAW_P2P_RESOLUTION_V1'
     },
     fail_closed: true,
     chain: { name: 'Arc Testnet', chain_id: ARC_CHAIN_ID },
@@ -182,15 +241,72 @@ app.post('/api/exchange/p2p/bind-wallet', authRequired, async (req, res) => {
   }
 });
 
+app.get('/api/exchange/p2p/admin/state-machine', authRequired, p2pAdminRequired, (req, res) => {
+  res.json({
+    ok:true,
+    actor:req.p2pAdmin,
+    chain_id:ARC_CHAIN_ID,
+    states:CASE_STATES,
+    transitions:ALLOWED_TRANSITIONS,
+    risk_levels:[...RISK_LEVELS],
+    evidence_visibility:[...EVIDENCE_VISIBILITY],
+    resolution_modes:[...RESOLUTION_MODES],
+    browser_broadcast_allowed:false,
+    database_mutation:false,
+    real_money_enabled:false
+  });
+});
+
+app.post('/api/exchange/p2p/admin/prepare-transition', authRequired, p2pAdminRequired, (req, res) => {
+  try {
+    const transition = validateTransition(req.body?.from, req.body?.to);
+    return res.json({
+      ok:true,
+      transition,
+      actor:req.p2pAdmin,
+      prepared_only:true,
+      database_mutation:false,
+      real_money_enabled:false
+    });
+  } catch (error) {
+    return adminPacketError(res, error);
+  }
+});
+
+app.post('/api/exchange/p2p/admin/prepare-case', authRequired, p2pAdminRequired, (req, res) => {
+  try {
+    return res.json({ ok:true, actor:req.p2pAdmin, ...prepareCase(req.body || {}) });
+  } catch (error) {
+    return adminPacketError(res, error);
+  }
+});
+
+app.post('/api/exchange/p2p/admin/prepare-evidence', authRequired, p2pAdminRequired, (req, res) => {
+  try {
+    return res.json({ ok:true, actor:req.p2pAdmin, ...prepareEvidence(req.body || {}) });
+  } catch (error) {
+    return adminPacketError(res, error);
+  }
+});
+
+app.post('/api/exchange/p2p/admin/prepare-resolution', authRequired, p2pAdminRequired, (req, res) => {
+  try {
+    return res.json({ ok:true, actor:req.p2pAdmin, ...prepareResolution(req.body || {}) });
+  } catch (error) {
+    return adminPacketError(res, error);
+  }
+});
+
 app.get('/api/exchange/p2p/health', (_req, res) => {
   res.json({
     ok:true,
     service:'MASTERLAW_P2P_CONTROL_PLANE',
-    version:'1.1.0-testnet',
+    version:'1.2.0-testnet',
     identity_store_configured:!!supabase,
     jwt_configured:!!jwtSecret,
     entitlement_signing_configured:!!entitlementSecret,
     wallet_attestation_source:'P2P_SIGNED_SESSION_READ_ONLY',
+    admin_workspace:'PREPARE_ONLY',
     chain_id:ARC_CHAIN_ID,
     writes_enabled:false,
     real_money_enabled:false
