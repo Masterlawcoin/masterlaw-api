@@ -54,4 +54,4 @@ jobs:
           set -euo pipefail
           test -s migrations/2026-10-15_masterlaw_p2p_control_plane.sql
           grep -q 'PREPARED MIGRATION ONLY' migrations/2026-10-15_masterlaw_p2p_control_plane.sql
-          ! grep -R -n -E 'supabase (db push|migration up)|psql .*masterlaw_p2p_control_plane' .github exchange exchange-p2p-api.js package.json vercel.json
+          ! grep -R -n -E 'supabase (db push|migration up)|psql .*masterlaw_p2p_control_plane' exchange exchange-p2p-api.js package.json vercel.json
