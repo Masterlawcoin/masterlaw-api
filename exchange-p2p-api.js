@@ -11,8 +11,10 @@ const {
   DEFAULT_P2P_EDGE,
   ENTITLEMENT_TYPE,
   ENTITLEMENT_TTL_SECONDS,
+  normalizeWallet,
   attestP2PSession,
-  issueEntitlement
+  issueEntitlement,
+  verifyEntitlement
 } = require('./exchange/p2p-wallet-binding');
 const {
   CASE_STATES,
@@ -139,7 +141,8 @@ app.get('/api/exchange/p2p/policy', (_req, res) => {
     wallet_binding: {
       mode: 'MASTERLAW_JWT_PLUS_P2P_SIGNED_SESSION',
       persistence: 'TEMPORARY_NOT_WRITTEN',
-      entitlement_ttl_seconds: ENTITLEMENT_TTL_SECONDS
+      entitlement_ttl_seconds: ENTITLEMENT_TTL_SECONDS,
+      server_verification: '/api/exchange/p2p/verify-entitlement'
     },
     admin_workspace: {
       mode: 'PREPARE_ONLY',
@@ -252,6 +255,76 @@ app.post('/api/exchange/p2p/bind-wallet', authRequired, async (req, res) => {
   }
 });
 
+app.post('/api/exchange/p2p/verify-entitlement', async (req, res) => {
+  if (!entitlementSecret) {
+    return res.status(503).json({ ok:false, verified:false, reason:'P2P_ENTITLEMENT_SIGNING_NOT_CONFIGURED', database_mutation:false, real_money_enabled:false });
+  }
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) {
+    return res.status(401).json({ ok:false, verified:false, reason:'P2P_ENTITLEMENT_REQUIRED', database_mutation:false, real_money_enabled:false });
+  }
+  try {
+    const expectedWallet = normalizeWallet(req.body?.expected_wallet);
+    const claims = verifyEntitlement(token, entitlementSecret);
+    if (claims.wallet !== expectedWallet) {
+      return res.status(403).json({ ok:false, verified:false, reason:'P2P_ENTITLEMENT_WALLET_MISMATCH', database_mutation:false, real_money_enabled:false });
+    }
+
+    const access = await getMasterlawAccess(claims.user_id);
+    if (!access.ok) {
+      return res.status(access.status).json({ ok:false, verified:false, reason:access.reason, database_mutation:false, real_money_enabled:false });
+    }
+    if (!access.decision.eligible || String(access.decision.status || '').toUpperCase() !== 'VERIFIED') {
+      return res.status(403).json({
+        ok:false,
+        verified:false,
+        reason:access.decision.reason || 'MASTERLAW_KYC_NOT_VERIFIED',
+        kyc_status:access.decision.status,
+        database_mutation:false,
+        real_money_enabled:false
+      });
+    }
+
+    return res.json({
+      ok:true,
+      verified:true,
+      user_id:String(claims.user_id),
+      wallet:claims.wallet,
+      chain_id:ARC_CHAIN_ID,
+      kyc_status:'VERIFIED',
+      kyc_level:access.decision.level ?? claims.kyc_level,
+      wallet_attestation:'P2P_SIGNED_SESSION',
+      entitlement_expires_at:new Date(Number(claims.exp) * 1000).toISOString(),
+      identity_rechecked:true,
+      persistence:'NOT_WRITTEN',
+      database_mutation:false,
+      real_money_enabled:false,
+      next:'P2P_BACKEND_MUST_ENFORCE_VERIFIED_ENTITLEMENT'
+    });
+  } catch (error) {
+    const known = new Set([
+      'INVALID_ARC_WALLET',
+      'INVALID_P2P_ENTITLEMENT_TOKEN',
+      'INVALID_P2P_ENTITLEMENT_TYPE',
+      'INVALID_P2P_ENTITLEMENT_SUBJECT',
+      'INVALID_P2P_ENTITLEMENT_CHAIN',
+      'INVALID_P2P_ENTITLEMENT_KYC',
+      'INVALID_P2P_ENTITLEMENT_KYC_LEVEL',
+      'INVALID_P2P_ENTITLEMENT_ATTESTATION',
+      'INVALID_P2P_ENTITLEMENT_PERSISTENCE',
+      'INVALID_P2P_ENTITLEMENT_SCOPE'
+    ]);
+    const reason = known.has(error.message) ? error.message : 'P2P_ENTITLEMENT_INVALID_OR_EXPIRED';
+    return res.status(403).json({
+      ok:false,
+      verified:false,
+      reason,
+      database_mutation:false,
+      real_money_enabled:false
+    });
+  }
+});
+
 app.get('/api/exchange/p2p/admin/state-machine', authRequired, p2pAdminRequired, (req, res) => {
   res.json({
     ok:true,
@@ -313,12 +386,13 @@ app.get('/api/exchange/p2p/health', (_req, res) => {
   res.json({
     ok:true,
     service:'MASTERLAW_P2P_CONTROL_PLANE',
-    version:'1.2.2-testnet',
+    version:'1.3.0-testnet',
     release:releaseMeta(),
     identity_store_configured:!!supabase,
     jwt_configured:!!jwtSecret,
     entitlement_signing_configured:!!entitlementSecret,
     wallet_attestation_source:'P2P_SIGNED_SESSION_READ_ONLY',
+    entitlement_verifier:'STATELESS_PLUS_CURRENT_KYC_RECHECK',
     admin_workspace:'PREPARE_ONLY',
     resolution_approver_source:'AUTHENTICATED_ADMIN',
     chain_id:ARC_CHAIN_ID,
