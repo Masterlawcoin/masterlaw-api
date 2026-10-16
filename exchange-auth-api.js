@@ -10,6 +10,7 @@ const app = express();
 const allowedOrigins = new Set([
   'https://masterlaw.cl',
   'https://www.masterlaw.cl',
+  'https://p2p.masterlaw.cl',
   'https://arcx-exchange-v2.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173'
