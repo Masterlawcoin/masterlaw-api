@@ -85,7 +85,38 @@ const {
   assert.strictEqual(decoded.aud, 'masterlawex-p2p');
   assert.strictEqual(decoded.iss, 'masterlaw-api');
 
+  function forged(overrides = {}, subject = 'user-123') {
+    return jwt.sign({
+      type: ENTITLEMENT_TYPE,
+      user_id: 'user-123',
+      wallet: normalized,
+      chain_id: ARC_CHAIN_ID,
+      kyc_status: 'VERIFIED',
+      kyc_level: 2,
+      wallet_attestation: 'P2P_SIGNED_SESSION',
+      persistence: 'NOT_WRITTEN',
+      database_mutation: false,
+      real_money_enabled: false,
+      ...overrides
+    }, secret, {
+      issuer: 'masterlaw-api',
+      audience: 'masterlawex-p2p',
+      subject,
+      expiresIn: 900
+    });
+  }
+
   assert.throws(() => verifyEntitlement(entitlement, 'wrong-secret'), /invalid signature/i);
+  assert.throws(() => verifyEntitlement(forged({ type:'OTHER' }), secret), /INVALID_P2P_ENTITLEMENT_TYPE/);
+  assert.throws(() => verifyEntitlement(forged({ user_id:'user-999' }), secret), /INVALID_P2P_ENTITLEMENT_SUBJECT/);
+  assert.throws(() => verifyEntitlement(forged({ chain_id:84532 }), secret), /INVALID_P2P_ENTITLEMENT_CHAIN/);
+  assert.throws(() => verifyEntitlement(forged({ kyc_status:'PENDING' }), secret), /INVALID_P2P_ENTITLEMENT_KYC/);
+  assert.throws(() => verifyEntitlement(forged({ kyc_level:0 }), secret), /INVALID_P2P_ENTITLEMENT_KYC_LEVEL/);
+  assert.throws(() => verifyEntitlement(forged({ wallet_attestation:'UNVERIFIED' }), secret), /INVALID_P2P_ENTITLEMENT_ATTESTATION/);
+  assert.throws(() => verifyEntitlement(forged({ persistence:'WRITTEN' }), secret), /INVALID_P2P_ENTITLEMENT_PERSISTENCE/);
+  assert.throws(() => verifyEntitlement(forged({ real_money_enabled:true }), secret), /INVALID_P2P_ENTITLEMENT_SCOPE/);
+  assert.throws(() => verifyEntitlement(forged({ database_mutation:true }), secret), /INVALID_P2P_ENTITLEMENT_SCOPE/);
+  assert.throws(() => verifyEntitlement('bad-token', secret), /INVALID_P2P_ENTITLEMENT_TOKEN/);
   assert.throws(() => issueEntitlement({ secret, userId:'user-123', wallet, kycStatus:'VERIFIED', expiresIn:7200 }), /INVALID_ENTITLEMENT_TTL/);
 
   console.log('MASTERLAW P2P STATELESS WALLET ENTITLEMENT PASS');
