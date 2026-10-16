@@ -17,6 +17,10 @@ const {
   verifyEntitlement
 } = require('./exchange/p2p-wallet-binding');
 const {
+  PROTECTED_ACTIONS,
+  enforceAndForward
+} = require('./exchange/p2p-enforcement-gateway');
+const {
   CASE_STATES,
   ALLOWED_TRANSITIONS,
   RISK_LEVELS,
@@ -39,7 +43,7 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET','POST','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization']
+  allowedHeaders: ['Content-Type','Authorization','X-P2P-Session']
 }));
 app.use(express.json({ limit: '256kb' }));
 
@@ -144,6 +148,18 @@ app.get('/api/exchange/p2p/policy', (_req, res) => {
       entitlement_ttl_seconds: ENTITLEMENT_TTL_SECONDS,
       server_verification: '/api/exchange/p2p/verify-entitlement'
     },
+    enforcement_gateway: {
+      mode: 'SANDBOX_ONLY',
+      path: '/api/exchange/p2p/gateway',
+      protected_actions: [...PROTECTED_ACTIONS],
+      entitlement_header: 'Authorization: Bearer <Masterlaw entitlement>',
+      signed_session_header: 'X-P2P-Session',
+      identity_recheck: true,
+      wallet_recheck: true,
+      existing_edge_configuration_mutated: false,
+      upstream_sandbox_state_may_change: true,
+      real_money_enabled: false
+    },
     admin_workspace: {
       mode: 'PREPARE_ONLY',
       role_source: 'MASTERLAW_USUARIOS_ROL',
@@ -233,7 +249,7 @@ app.post('/api/exchange/p2p/bind-wallet', authRequired, async (req, res) => {
       entitlement,
       expires_in:ENTITLEMENT_TTL_SECONDS,
       real_money_enabled:false,
-      next:'SERVER_SIDE_P2P_ENTITLEMENT_ENFORCEMENT_REQUIRED'
+      next:'USE_MASTERLAW_P2P_GATEWAY_FOR_PROTECTED_SANDBOX_ACTIONS'
     });
   } catch (error) {
     const known = new Set([
@@ -299,7 +315,7 @@ app.post('/api/exchange/p2p/verify-entitlement', async (req, res) => {
       persistence:'NOT_WRITTEN',
       database_mutation:false,
       real_money_enabled:false,
-      next:'P2P_BACKEND_MUST_ENFORCE_VERIFIED_ENTITLEMENT'
+      next:'USE_MASTERLAW_P2P_GATEWAY_FOR_PROTECTED_SANDBOX_ACTIONS'
     });
   } catch (error) {
     const known = new Set([
@@ -320,6 +336,50 @@ app.post('/api/exchange/p2p/verify-entitlement', async (req, res) => {
       verified:false,
       reason,
       database_mutation:false,
+      real_money_enabled:false
+    });
+  }
+});
+
+app.post('/api/exchange/p2p/gateway', async (req, res) => {
+  const entitlementToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  const p2pSessionToken = req.headers['x-p2p-session'];
+  if (!entitlementToken) return res.status(401).json({ ok:false, reason:'P2P_ENTITLEMENT_REQUIRED', real_money_enabled:false });
+  if (!p2pSessionToken) return res.status(401).json({ ok:false, reason:'P2P_SIGNED_SESSION_REQUIRED', real_money_enabled:false });
+  try {
+    const result = await enforceAndForward({
+      entitlementToken,
+      p2pSessionToken,
+      body:req.body || {},
+      entitlementSecret,
+      getCurrentAccess:getMasterlawAccess,
+      edgeUrl:p2pEdgeUrl
+    });
+    return res.json({
+      ...result.upstream,
+      _masterlaw_gateway:{
+        enforced:true,
+        mode:'SANDBOX_ONLY',
+        action:result.action,
+        user_id:result.user_id,
+        wallet:result.wallet,
+        kyc_status:result.kyc_status,
+        kyc_level:result.kyc_level,
+        identity_rechecked:result.identity_rechecked,
+        wallet_rechecked:result.wallet_rechecked,
+        enforcement:result.enforcement,
+        database_mutation_by_gateway:false,
+        supabase_configuration_mutation:false,
+        real_money_enabled:false
+      }
+    });
+  } catch (error) {
+    const status = Number(error.status || 403);
+    return res.status(status >= 400 && status < 600 ? status : 403).json({
+      ok:false,
+      reason:String(error.message || 'P2P_GATEWAY_BLOCKED'),
+      gateway_enforced:true,
+      supabase_configuration_mutation:false,
       real_money_enabled:false
     });
   }
@@ -386,13 +446,17 @@ app.get('/api/exchange/p2p/health', (_req, res) => {
   res.json({
     ok:true,
     service:'MASTERLAW_P2P_CONTROL_PLANE',
-    version:'1.3.0-testnet',
+    version:'1.4.0-testnet',
     release:releaseMeta(),
     identity_store_configured:!!supabase,
     jwt_configured:!!jwtSecret,
     entitlement_signing_configured:!!entitlementSecret,
     wallet_attestation_source:'P2P_SIGNED_SESSION_READ_ONLY',
     entitlement_verifier:'STATELESS_PLUS_CURRENT_KYC_RECHECK',
+    enforcement_gateway:'AVAILABLE_SANDBOX_ONLY',
+    enforcement_gateway_path:'/api/exchange/p2p/gateway',
+    enforcement_actions:[...PROTECTED_ACTIONS],
+    existing_edge_configuration_mutated:false,
     admin_workspace:'PREPARE_ONLY',
     resolution_approver_source:'AUTHENTICATED_ADMIN',
     chain_id:ARC_CHAIN_ID,
