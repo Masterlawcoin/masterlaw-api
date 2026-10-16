@@ -76,12 +76,19 @@ function issueEntitlement({ secret, userId, wallet, kycStatus, kycLevel, expires
 
 function verifyEntitlement(token, secret) {
   if (!secret) throw new Error('MASTERLAW_AUTH_NOT_CONFIGURED');
-  const claims = jwt.verify(String(token || ''), secret, {
+  const raw = String(token || '').trim();
+  if (raw.length < 32 || raw.length > 16384 || /[\r\n]/.test(raw)) throw new Error('INVALID_P2P_ENTITLEMENT_TOKEN');
+  const claims = jwt.verify(raw, secret, {
     issuer: ENTITLEMENT_ISSUER,
     audience: ENTITLEMENT_AUDIENCE
   });
   if (claims.type !== ENTITLEMENT_TYPE) throw new Error('INVALID_P2P_ENTITLEMENT_TYPE');
+  if (!claims.sub || !claims.user_id || String(claims.sub) !== String(claims.user_id)) throw new Error('INVALID_P2P_ENTITLEMENT_SUBJECT');
   if (Number(claims.chain_id) !== ARC_CHAIN_ID) throw new Error('INVALID_P2P_ENTITLEMENT_CHAIN');
+  if (String(claims.kyc_status || '').toUpperCase() !== 'VERIFIED') throw new Error('INVALID_P2P_ENTITLEMENT_KYC');
+  if (!Number.isInteger(Number(claims.kyc_level)) || Number(claims.kyc_level) < 1) throw new Error('INVALID_P2P_ENTITLEMENT_KYC_LEVEL');
+  if (claims.wallet_attestation !== 'P2P_SIGNED_SESSION') throw new Error('INVALID_P2P_ENTITLEMENT_ATTESTATION');
+  if (claims.persistence !== 'NOT_WRITTEN') throw new Error('INVALID_P2P_ENTITLEMENT_PERSISTENCE');
   if (claims.real_money_enabled !== false || claims.database_mutation !== false) throw new Error('INVALID_P2P_ENTITLEMENT_SCOPE');
   claims.wallet = normalizeWallet(claims.wallet);
   return claims;
