@@ -59,6 +59,7 @@ jobs:
           grep -q 'exchange-p2p-api.js' vercel.json
           grep -q '/api/exchange/p2p' vercel.json
           grep -q "app.post('/api/exchange/p2p/bind-wallet'" exchange-p2p-api.js
+          grep -q "app.post('/api/exchange/p2p/verify-entitlement'" exchange-p2p-api.js
           grep -q "app.get('/api/exchange/p2p/admin/state-machine'" exchange-p2p-api.js
           grep -q "app.post('/api/exchange/p2p/admin/prepare-case'" exchange-p2p-api.js
           grep -q "app.post('/api/exchange/p2p/admin/prepare-evidence'" exchange-p2p-api.js
@@ -68,14 +69,19 @@ jobs:
           grep -q 'database_mutation: false' exchange-p2p-api.js
           grep -q "identity_source: 'MASTERLAW_USUARIOS_ID'" exchange-p2p-api.js
           grep -q "MASTERLAW_P2P_ENTITLEMENT_V1" exchange/p2p-wallet-binding.js
+          grep -q "INVALID_P2P_ENTITLEMENT_SUBJECT" exchange/p2p-wallet-binding.js
+          grep -q "INVALID_P2P_ENTITLEMENT_KYC" exchange/p2p-wallet-binding.js
           grep -q "MASTERLAW_P2P_CASE_V1" exchange/p2p-case-admin.js
           grep -q "MASTERLAW_P2P_EVIDENCE_V1" exchange/p2p-case-admin.js
           grep -q "MASTERLAW_P2P_RESOLUTION_V1" exchange/p2p-case-admin.js
           grep -q "real_money_enabled: false" exchange/p2p-wallet-binding.js
+          grep -q "server_verification: '/api/exchange/p2p/verify-entitlement'" exchange-p2p-api.js
+          grep -q "identity_rechecked:true" exchange-p2p-api.js
+          grep -q "entitlement_verifier:'STATELESS_PLUS_CURRENT_KYC_RECHECK'" exchange-p2p-api.js
           grep -q "schema:'MASTERLAW_P2P_RELEASE_V1'" exchange-p2p-api.js
           grep -q 'VERCEL_GIT_COMMIT_SHA' exchange-p2p-api.js
           grep -q 'VERCEL_GIT_COMMIT_REF' exchange-p2p-api.js
-          grep -q "version:'1.2.2-testnet'" exchange-p2p-api.js
+          grep -q "version:'1.3.0-testnet'" exchange-p2p-api.js
           grep -q 'release:releaseMeta()' exchange-p2p-api.js
       - name: Guard stateless read-only control plane
         shell: bash
@@ -88,7 +94,7 @@ jobs:
           grep -q "browser_broadcast_allowed: false" exchange/p2p-case-admin.js
           grep -q "database_mutation: false" exchange/p2p-case-admin.js
           grep -q "real_money_enabled:false" exchange-p2p-api.js
-          grep -q "real_money_enabled:false" exchange/p2p-api.js 2>/dev/null || true
+          grep -q "next:'P2P_BACKEND_MUST_ENFORCE_VERIFIED_ENTITLEMENT'" exchange-p2p-api.js
           ! grep -R -n -E 'auto_action:[[:space:]]*true' exchange/p2p-case-admin.js exchange-p2p-api.js
       - name: Guard non-executed migration
         shell: bash
