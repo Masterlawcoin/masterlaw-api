@@ -3,6 +3,7 @@
   "builds": [
     { "src": "frutillar/**", "use": "@vercel/static" },
     { "src": "server.js", "use": "@vercel/node" },
+    { "src": "broker-onboarding.js", "use": "@vercel/node" },
     { "src": "exchange-auth-api.js", "use": "@vercel/node" },
     { "src": "exchange-p2p-cors-api.js", "use": "@vercel/node" },
     { "src": "exchange-p2p-api.js", "use": "@vercel/node" },
@@ -13,6 +14,9 @@
   "routes": [
     { "src": "/frutillar/?", "dest": "/frutillar/index.html" },
     { "src": "/frutillar/(.*)", "dest": "/frutillar/$1" },
+    { "src": "/registro-broker/?", "dest": "broker-onboarding.js" },
+    { "src": "/broker/registro/?", "dest": "broker-onboarding.js" },
+    { "src": "/api/brokers/register/?", "dest": "broker-onboarding.js" },
     { "src": "/api/exchange/auth(?:/.*)?", "dest": "exchange-auth-api.js" },
     { "src": "/api/exchange/p2p(?:/.*)?", "dest": "exchange-p2p-cors-api.js" },
     { "src": "/api/panos/web/menu", "dest": "panos-web-api.js" },
